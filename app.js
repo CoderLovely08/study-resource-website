@@ -9,23 +9,13 @@ const fileupload = require("express-fileupload");
 const loadsh = require("lodash")
 const session = require('express-session');
 require("dotenv").config();
+var async = require('async');
 
-// For database connection
+
+// For MySQL database connection
+var mysql = require('mysql');
+
 const { Client } = require("pg");
-
-const app = express();
-
-app.set('view engine', 'ejs');
-
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(express.static("public"));
-app.use(fileupload());
-app.use(session({ secret: 'mysecret' }));
-
-/*-------------------------------------------
-                Global Variables
-  -------------------------------------------*/
-
 const client = new Client({
     host: process.env.ADMIN_HOST,
     user: process.env.ADMIN_USER,
@@ -36,15 +26,39 @@ const client = new Client({
     connectionTimeoutMillis: 0
 });
 
-client.connect();
 
+
+// -----------------------------------------------------------
+//                    Temporary Section
+// -----------------------------------------------------------
+
+
+// -----------------------------------------------------------
+
+client.connect();
+const oneDay = 1000 * 60 * 60 * 24;
+const app = express();
+
+app.set('view engine', 'ejs');
+
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.static("public"));
+app.use(fileupload());
+app.use(session({
+    secret: "thisismysecrctekeyfhrgfgrfrty84fwir767",
+    saveUninitialized: true,
+    cookie: { maxAge: oneDay },
+    resave: false,
+}));
+
+let myvar = 0;
 
 /*-------------------------------------------
                 Home route
   -------------------------------------------*/
 app.get("/", function (req, res) {
     // Querying all records to display all books
-    client.query("Select * from BookData order by book_title").then((results) => {
+    client.query("Select * from BookData order by book_title", (err, results) => {
         res.render("home", { books: results.rows });
     });
 });
@@ -68,10 +82,12 @@ app.post("/admin", function (req, res) {
     sess = req.session;
     let username = req.body.username;
     let adminpass = req.body.adminPassword;
-    client.query("Select * from AdminInfo where username = $1 and login_password= $2", [username, adminpass]).then((results) => {
-        if (results.rowCount == 1) {
-            sess.isLoggedin=results.rows[0].username;
-            console.log(sess.isLoggedin);
+    let query = `Select * from AdminInfo where username = '${username}' and login_password= '${adminpass}'`;
+    client.query(query, (err, results) => {
+        if (results.rows.length == 1) {
+            req.session.isLoggedin = results.rows[0].admin_name;
+            req.session.adminId = results.rows[0].admin_id;
+            myvar = req.session.adminId;
             res.render("add");
         } else {
             res.render('admin');
@@ -96,26 +112,76 @@ app.post("/upload", function (req, res) {
     let uploadPath = __dirname + "/uploads/" + myfile.name;
     // move the file to uploads folder for temp storage
     myfile.mv(uploadPath, function (err) {
-        if (err) console.log("Error!");
+        // if (err) console.log("Error!");
 
         // upload the moved file to imgur and recieve a callback
         imgur(fs.readFileSync(uploadPath)).then(data => {
 
             // set the attributes based on the response we get
             let bookTitle = req.body.bookTitle;
-            let bookRoute = req.body.bookRoute;
+            let bookRoute = req.body.bookRoute.trim();
             let imageSrc = data.link;  // only this is important for us
             let folderUrl = req.body.bookLink;
+            let references = req.body.bookReferences;
 
-            // inserting the data into our book database
-            client.query("Insert into BookData(book_title, book_route, book_image_src, book_folderlink) values($1,$2,$3,$4)", [bookTitle, bookRoute, imageSrc, folderUrl]).then(data => {
-                console.log(data);
-            });
+            // Check route if exists
+            async.series([
+                function (callback) {
+                    let checkquery = `Select * from BookData where book_route = '${bookRoute}'`;
+                    client.query(checkquery, (err, results) => {
+                        if (results.length != 0) {
+                            callback(true);
+                        }
+                        else callback();
+                    });
+                },
+                function (callback) {
+                    // inserting the data into our book database
+                    let query = `Insert into BookData(book_title, book_route, book_image_src, book_folderlink, admin_id) values('${bookTitle}','${bookRoute}','${imageSrc}','${folderUrl}', ${myvar})`;
+
+                    client.query(query, (err, result) => {
+                        callback();
+                    });
+                },
+                function (callback) {
+                    // Inserting references if any by selecting the latest id
+                    if (references.trim().length != 0) {
+                        query = "Select * from BookData order by book_id desc Limit 1";
+                        let latestBookId;
+                        client.query(query, (err, result) => {
+
+                            latestBookId = result[0].book_id;
+
+                            // If admin has provided any reference then insert them all
+                            if (references.length != 0 && latestBookId != -1) {
+                                let insertQuery = `insert into BookReferences(book_id,book_reference_name,book_reference_link) values`
+
+                                let newItem = references.split(",");
+                                for (let i = 0; i < newItem.length; i++) {
+                                    let eachItem = newItem[i].split("http");
+                                    eachItem[1] = "http" + eachItem[1];
+                                    let refName = eachItem[0].trim();
+                                    let refLink = eachItem[1].trim();
+                                    insertQuery = insertQuery + `(${latestBookId},'${refName}','${refLink}')`
+                                    if (i != newItem.length - 1) insertQuery += ","
+                                }
+                                client.query(insertQuery, (err, result) => {
+                                    if (err) console.log(err);
+                                });
+                            }
+                            callback();
+                        });
+                    }
+                }
+            ],
+                function (err, result) {
+                    if (err) { res.render("error"); }
+                    // redirect admin to the home after inserting and display new updated book
+                    if (result) res.redirect("/");
+                });
+
             // removing the file from our temporary uploads folder
             fs.unlinkSync(uploadPath);
-
-            // redirect admin to the home after inserting and display new updated book
-            res.redirect("/");
         });
     });
 
@@ -128,15 +194,21 @@ app.post("/upload", function (req, res) {
 app.get("/posts/:postId", function (req, res) {
     // perform linear search for the route 
     // if found just render that page only
-    client.query("Select * from BookData").then((results) => {
-        let booksData = results.rows;
-        let bookTitle = loadsh.lowerCase(req.params.postId);
-        for (let i = 0; i < booksData.length; i++) {
-            if (bookTitle === booksData[i].book_route) {
-                res.render("posts", { bookData: booksData[i] });
-            }
-        }
+    let bookTitle = loadsh.lowerCase(req.params.postId);
+    let sqlQuery = `Select BookData.book_id,BookData.book_title,BookData.book_route,BookData.book_image_src,BookData.book_folderlink,AdminInfo.admin_name from BookData,AdminInfo where BookData.admin_id=AdminInfo.admin_id and BookData.book_route='${bookTitle}'`;
+
+    client.query(sqlQuery, (err, results) => {
+        client.query(`Select * from BookReferences where book_id = ${results.rows[0].book_id}`, (err, refResult) => {
+            res.render("posts", { bookData: results.rows[0], bookReferences: refResult.rows });
+        });
     });
+});
+
+// To handle invalid routes
+app.use(function (req, res) {
+    // Invalid request
+    res.render("error");
+
 });
 
 // Starting the app
