@@ -16,6 +16,7 @@ var async = require('async');
 var mysql = require('mysql');
 
 const { Client } = require("pg");
+const { query } = require("express");
 const client = new Client({
     host: process.env.ADMIN_HOST,
     user: process.env.ADMIN_USER,
@@ -45,7 +46,7 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
 app.use(fileupload());
 app.use(session({
-    secret: "thisismysecrctekeyfhrgfgrfrty84fwir767",
+    secret: process.env.APP_SECRET,
     saveUninitialized: true,
     cookie: { maxAge: oneDay },
     resave: false,
@@ -82,18 +83,33 @@ app.post("/admin", function (req, res) {
     sess = req.session;
     let username = req.body.username;
     let adminpass = req.body.adminPassword;
-    let query = `Select * from AdminInfo where username = '${username}' and login_password= '${adminpass}'`;
+    let query = `Select * from AdminInfo where admin_user_name = '${username}' and admin_password= '${adminpass}'`;
     client.query(query, (err, results) => {
-        if (results.rows.length == 1) {
-            req.session.isLoggedin = results.rows[0].admin_name;
-            req.session.adminId = results.rows[0].admin_id;
-            myvar = req.session.adminId;
-            res.render("add");
-        } else {
-            res.render('admin');
+        if (err) console.log(err);
+        else {
+            if (results.rows.length == 1) {
+                req.session.isLoggedin = results.rows[0].admin_name;
+                req.session.adminId = results.rows[0].admin_id;
+                myvar = req.session.adminId;
+                res.redirect("/adminView");
+            } else {
+                res.render('admin');
+            }
         }
     });
 });
+
+
+app.get('/adminView', function (req, res) {
+    let query = "Select * from BookData order by book_id";
+    client.query(query, function (err, results) {
+        if (err) console.log(err);
+        else {
+            let bookDetails = results.rows;
+            res.render('adminView', { bookDetails: bookDetails })
+        }
+    })
+})
 
 
 

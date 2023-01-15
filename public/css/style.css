@@ -265,3 +265,8 @@ ul {
 @media (min-width:1025px) {}
 
 @media (min-width:1281px) {}
+
+tbody tr td img{
+  max-width: 70px;
+  max-height: 100px;
+}

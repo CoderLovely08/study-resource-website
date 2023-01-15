@@ -1,0 +1,39 @@
+<%- include("partials/header") -%>
+
+    <div class="container">
+        <div class="row">
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr class="post-table">
+                            <th>Book Id</th>
+                            <th>Book Title</th>
+                            <th>Book Image</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <% for(let i=0; i<bookDetails.length; i++){ %>
+                            <tr>
+                                <td>
+                                    <%= bookDetails[i].book_id %>
+                                </td>
+                                <td>
+                                    <%= bookDetails[i].book_title %>
+                                </td>
+                                <td>
+                                   <img width="50px" height="70px" src=<%= bookDetails[i].book_image_src %> alt=<%= bookDetails[i].book_title %>>
+                                </td>
+                                <td>
+                                    <button class="btn btn-success">Edit</button>
+                                    <button class="btn btn-danger">Delete</button>
+                                </td>
+                            </tr>
+                            <% } %>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <%- include("partials/footer") -%>
