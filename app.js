@@ -125,82 +125,83 @@ app.post("/upload", function (req, res) {
     // if file exists store it in myfile variable
     let myfile = req.files.thumbnail;
 
-    let uploadPath = __dirname + "/uploads/" + myfile.name;
+    // let uploadPath = __dirname + "/uploads/" + myfile.name;
     // move the file to uploads folder for temp storage
-    myfile.mv(uploadPath, function (err) {
-        // if (err) console.log("Error!");
+    // if (err) console.log("Error!");
 
-        // upload the moved file to imgur and recieve a callback
-        imgur(fs.readFileSync(uploadPath)).then(data => {
+    // upload the moved file to imgur and recieve a callback
+    imgur(myfile.data).then(data => {
 
-            // set the attributes based on the response we get
-            let bookTitle = req.body.bookTitle;
-            let bookRoute = req.body.bookRoute.trim();
-            let imageSrc = data.link;  // only this is important for us
-            let folderUrl = req.body.bookLink;
-            let references = req.body.bookReferences;
+        // set the attributes based on the response we get
+        let bookTitle = req.body.bookTitle;
+        let bookRoute = req.body.bookRoute.trim();
+        let imageSrc = data.link;  // only this is important for us
+        let folderUrl = req.body.bookLink;
+        let references = req.body.bookReferences;
 
-            // Check route if exists
-            async.series([
-                function (callback) {
-                    let checkquery = `Select * from BookData where book_route = '${bookRoute}'`;
-                    client.query(checkquery, (err, results) => {
-                        if (results.length != 0) {
-                            callback(true);
-                        }
-                        else callback();
-                    });
-                },
-                function (callback) {
-                    // inserting the data into our book database
-                    let query = `Insert into BookData(book_title, book_route, book_image_src, book_folderlink, admin_id) values('${bookTitle}','${bookRoute}','${imageSrc}','${folderUrl}', ${myvar})`;
+        // Check route if exists
+        async.series([
+            function (callback) {
+                console.log("fun1");
+                let checkquery = `Select * from BookData where book_route = '${bookRoute}'`;
+                client.query(checkquery, (err, results) => {
+                    if (err) console.log(err);
+                    if (results.rows.length != 0) {
+                        console.log("fun10", checkquery, results.rows);
+                        callback(true);
+                    }
+                    else callback();
+                });
+            },
+            function (callback) {
+                console.log("fun2");
+                // inserting the data into our book database
+                let query = `Insert into BookData(book_title, book_route, book_image_src, book_folderlink, admin_id) values('${bookTitle}','${bookRoute}','${imageSrc}','${folderUrl}', ${myvar})`;
 
+                client.query(query, (err, result) => {
+                    if (err) console.log(err);
+                    callback();
+                });
+            },
+            function (callback) {
+                // Inserting references if any by selecting the latest id
+                if (references.trim().length != 0) {
+                    let query = "Select * from BookData order by book_id desc Limit 1";
+                    let latestBookId;
                     client.query(query, (err, result) => {
+                        if (err) console.log(err);
+                        latestBookId = result.rows[0].book_id;
+
+                        // If admin has provided any reference then insert them all
+                        if (references.length != 0 && latestBookId != -1) {
+                            let insertQuery = `insert into BookReferences(book_id,book_reference_name,book_reference_link) values`
+
+                            let newItem = references.split(",");
+                            for (let i = 0; i < newItem.length; i++) {
+                                let eachItem = newItem[i].split("http");
+                                eachItem[1] = "http" + eachItem[1];
+                                let refName = eachItem[0].trim();
+                                let refLink = eachItem[1].trim();
+                                insertQuery = insertQuery + `(${latestBookId},'${refName}','${refLink}')`
+                                if (i != newItem.length - 1) insertQuery += ","
+                            }
+                            client.query(insertQuery, (err, result) => {
+                                if (err) console.log(err);
+                            });
+                        }
                         callback();
                     });
-                },
-                function (callback) {
-                    // Inserting references if any by selecting the latest id
-                    if (references.trim().length != 0) {
-                        query = "Select * from BookData order by book_id desc Limit 1";
-                        let latestBookId;
-                        client.query(query, (err, result) => {
-
-                            latestBookId = result[0].book_id;
-
-                            // If admin has provided any reference then insert them all
-                            if (references.length != 0 && latestBookId != -1) {
-                                let insertQuery = `insert into BookReferences(book_id,book_reference_name,book_reference_link) values`
-
-                                let newItem = references.split(",");
-                                for (let i = 0; i < newItem.length; i++) {
-                                    let eachItem = newItem[i].split("http");
-                                    eachItem[1] = "http" + eachItem[1];
-                                    let refName = eachItem[0].trim();
-                                    let refLink = eachItem[1].trim();
-                                    insertQuery = insertQuery + `(${latestBookId},'${refName}','${refLink}')`
-                                    if (i != newItem.length - 1) insertQuery += ","
-                                }
-                                client.query(insertQuery, (err, result) => {
-                                    if (err) console.log(err);
-                                });
-                            }
-                            callback();
-                        });
-                    }
                 }
-            ],
-                function (err, result) {
-                    if (err) { res.render("error"); }
-                    // redirect admin to the home after inserting and display new updated book
-                    if (result) res.redirect("/");
-                });
+            }
+        ],
+            function (err, result) {
+                if (err) { res.render("error"); }
+                // redirect admin to the home after inserting and display new updated book
+                else if (result) res.redirect("/");
+            });
 
-            // removing the file from our temporary uploads folder
-            fs.unlinkSync(uploadPath);
-        });
+        // removing the file from our temporary uploads folder
     });
-
 });
 
 
