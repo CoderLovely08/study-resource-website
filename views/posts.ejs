@@ -3,16 +3,16 @@
             <div class="resourceContainer">
                 
                 <div class="resource-item">
-                    <a href=<%=bookData.book_folderlink %>
-                        target="_blank"> <img src=<%=bookData.book_image_src %> alt=""><br>
-                        <%= bookData.book_title %>
+                    <a href=<%=books.book_folderlink %>
+                        target="_blank"> <img src=<%=books.book_image_src %> alt=""><br>
+                        <%= books.book_title %>
                     </a>
                 </div>
                 <div class="resource-item-list">
                     <ul>
                         <!-- paste here the link for drive folder -->
                         <span>
-                            <a href=<%=bookData.book_folderlink %> target="_blank" >
+                            <a href=<%=books.book_folderlink %> target="_blank" >
                                 Click here
                             </a>
                             for Books and References
@@ -39,7 +39,7 @@
 
             </div>
             <div>
-                <span>Uploaded By: <%= bookData.admin_name %></span>
+                <span>Uploaded By: <%= books.admin_name %></span>
             </div>
         </section>
     </div>

@@ -213,7 +213,7 @@ app.get("/posts/:postId", function (req, res) {
 
     client.query(sqlQuery, (err, results) => {
         client.query(`Select * from BookReferences where book_id = ${results.rows[0].book_id}`, (err, refResult) => {
-            res.render("posts", { bookData: results.rows[0], bookReferences: refResult.rows });
+            res.render("posts", { books: results.rows[0], bookReferences: refResult.rows });
         });
     });
 });
