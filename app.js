@@ -4,8 +4,6 @@ const express = require("express");
 const bodyParser = require("body-parser");
 const ejs = require("ejs");
 const imgur = require('imgur-uploader');
-const fs = require("fs")
-const fileupload = require("express-fileupload");
 const loadsh = require("lodash")
 const session = require('express-session');
 require("dotenv").config();
@@ -44,7 +42,6 @@ app.set('view engine', 'ejs');
 
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static("public"));
-app.use(fileupload());
 app.use(session({
     secret: process.env.APP_SECRET,
     saveUninitialized: true,
