@@ -49,7 +49,7 @@ app.use(session({
     resave: false,
 }));
 
-let myvar = 0;
+let dsp = 0;
 
 /*-------------------------------------------
                 Home route
